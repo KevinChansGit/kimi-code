@@ -120,6 +120,164 @@ tools:
     expect(coderPrompt).not.toContain('{{ ROLE_ADDITIONAL }}');
   });
 
+  it('inherits and overrides modelAlias through extends', async () => {
+    await write(
+      'agent.yaml',
+      `
+name: agent
+modelAlias: parent-model
+tools:
+  - Read
+subagents:
+  coder:
+    description: Coder child subagent
+`,
+    );
+    await write(
+      'coder.yaml',
+      `
+extends: agent
+name: coder
+modelAlias: child-model
+tools:
+  - Bash
+`,
+    );
+    await write(
+      'explore.yaml',
+      `
+extends: agent
+name: explore
+tools:
+  - Bash
+`,
+    );
+    await write(
+      'shared.yaml',
+      `
+name: shared
+systemPromptTemplate: shared prompt
+modelAlias: shared-model
+tools:
+  - Read
+`,
+    );
+
+    const profiles = await loadAgentProfilesFromDir([
+      join(workDir, 'agent.yaml'),
+      join(workDir, 'coder.yaml'),
+      join(workDir, 'explore.yaml'),
+      join(workDir, 'shared.yaml'),
+    ]);
+
+    // Child profile overrides parent modelAlias
+    expect(profiles['coder']?.modelAlias).toBe('child-model');
+    // Child without modelAlias inherits from parent
+    expect(profiles['explore']?.modelAlias).toBe('parent-model');
+    // Standalone profile keeps its own modelAlias
+    expect(profiles['shared']?.modelAlias).toBe('shared-model');
+    // Parent subagent entry description is applied to the resolved target profile
+    expect(profiles['coder']?.description).toBe('Coder child subagent');
+  });
+
+  it('copies modelAlias from parent subagent entry when target has none', async () => {
+    await write(
+      'parent.yaml',
+      `\nname: parent\nsystemPromptTemplate: parent prompt\ntools:\n  - Read\nsubagents:\n  worker:\n    description: Worker subagent\n    modelAlias: subagent-entry-model\n`,
+    );
+    await write(
+      'worker.yaml',
+      `\nname: worker\nsystemPromptTemplate: worker prompt\ntools:\n  - Bash\n`,
+    );
+
+    const profiles = await loadAgentProfilesFromDir([
+      join(workDir, 'parent.yaml'),
+      join(workDir, 'worker.yaml'),
+    ]);
+
+    // The worker profile has no modelAlias, so the parent subagent entry's modelAlias is copied
+    expect(profiles['worker']?.modelAlias).toBe('subagent-entry-model');
+    expect(profiles['worker']?.description).toBe('Worker subagent');
+  });
+
+  it('inherits and overrides thinkingLevel through extends', async () => {
+    await write(
+      'agent.yaml',
+      `
+name: agent
+thinkingLevel: max
+tools:
+  - Read
+subagents:
+  coder:
+    description: Coder child subagent
+`,
+    );
+    await write(
+      'coder.yaml',
+      `
+extends: agent
+name: coder
+thinkingLevel: off
+tools:
+  - Bash
+`,
+    );
+    await write(
+      'explore.yaml',
+      `
+extends: agent
+name: explore
+tools:
+  - Bash
+`,
+    );
+    await write(
+      'shared.yaml',
+      `
+name: shared
+systemPromptTemplate: shared prompt
+thinkingLevel: medium
+tools:
+  - Read
+`,
+    );
+
+    const profiles = await loadAgentProfilesFromDir([
+      join(workDir, 'agent.yaml'),
+      join(workDir, 'coder.yaml'),
+      join(workDir, 'explore.yaml'),
+      join(workDir, 'shared.yaml'),
+    ]);
+
+    // Child profile overrides parent thinkingLevel
+    expect(profiles['coder']?.thinkingLevel).toBe('off');
+    // Child without thinkingLevel inherits from parent
+    expect(profiles['explore']?.thinkingLevel).toBe('max');
+    // Standalone profile keeps its own thinkingLevel
+    expect(profiles['shared']?.thinkingLevel).toBe('medium');
+  });
+
+  it('copies thinkingLevel from parent subagent entry when target has none', async () => {
+    await write(
+      'parent.yaml',
+      `\nname: parent\nsystemPromptTemplate: parent prompt\ntools:\n  - Read\nsubagents:\n  worker:\n    description: Worker subagent\n    thinkingLevel: low\n`,
+    );
+    await write(
+      'worker.yaml',
+      `\nname: worker\nsystemPromptTemplate: worker prompt\ntools:\n  - Bash\n`,
+    );
+
+    const profiles = await loadAgentProfilesFromDir([
+      join(workDir, 'parent.yaml'),
+      join(workDir, 'worker.yaml'),
+    ]);
+
+    // The worker profile has no thinkingLevel, so the parent subagent entry's thinkingLevel is copied
+    expect(profiles['worker']?.thinkingLevel).toBe('low');
+    expect(profiles['worker']?.description).toBe('Worker subagent');
+  });
+
   it('reports invalid profile graphs without relying on loader internals', () => {
     expect(() =>
       resolveAgentProfiles([

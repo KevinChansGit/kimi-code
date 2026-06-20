@@ -83,6 +83,7 @@ export interface RunSubagentOptions {
 export interface SpawnSubagentOptions extends RunSubagentOptions {
   readonly profileName: string;
   readonly swarmItem?: string;
+  readonly modelAlias?: string;
 }
 
 type SubagentCompletion = {
@@ -123,7 +124,7 @@ export class SessionSubagentHost {
     const completion = this.runWithActiveChild(id, options, async (runOptions) => {
       this.emitSubagentSpawned(parent, id, profile.name, runOptions);
       try {
-        await this.configureChild(parent, agent, profile);
+        await this.configureChild(parent, agent, profile, options);
         return await this.runPromptTurn(parent, id, agent, profile.name, runOptions);
       } catch (error) {
         this.emitSubagentFailed(parent, id, runOptions, error);
@@ -138,13 +139,18 @@ export class SessionSubagentHost {
     };
   }
 
+  /**
+   * Resume a previously spawned subagent.
+   *
+   * Does NOT re-configure cwd, modelAlias, or thinkingLevel so that
+   * profile-declared cost-optimized models are preserved across resume cycles.
+   */
   async resume(agentId: string, options: RunSubagentOptions): Promise<SubagentHandle> {
     options.signal.throwIfAborted();
     const { parent, child, profileName } = await this.ensureIdleSubagent(agentId);
     const completion = this.runWithActiveChild(agentId, options, async (runOptions) => {
       this.emitSubagentSpawned(parent, agentId, profileName, runOptions);
       try {
-        child.config.update({ modelAlias: parent.config.modelAlias });
         return await this.runPromptTurn(parent, agentId, child, profileName, runOptions);
       } catch (error) {
         this.emitSubagentFailed(parent, agentId, runOptions, error);
@@ -154,13 +160,18 @@ export class SessionSubagentHost {
     return { agentId, profileName, resumed: true, completion };
   }
 
+  /**
+   * Retry a previously spawned subagent after a failure.
+   *
+   * Does NOT re-configure cwd, modelAlias, or thinkingLevel so that
+   * profile-declared cost-optimized models are preserved across retry cycles.
+   */
   async retry(agentId: string, options: RunSubagentOptions): Promise<SubagentHandle> {
     options.signal.throwIfAborted();
     const { parent, child, profileName } = await this.ensureIdleSubagent(agentId);
     const completion = this.runWithActiveChild(agentId, options, async (runOptions) => {
       try {
         runOptions.signal.throwIfAborted();
-        child.config.update({ modelAlias: parent.config.modelAlias });
         this.emitSubagentStarted(parent, agentId);
         const turnId = child.turn.retry('agent-host');
         if (turnId === null) {
@@ -210,6 +221,15 @@ export class SessionSubagentHost {
     });
   }
 
+  /**
+   * Start a BTW (by-the-way) side-conversation agent.
+   *
+   * BTW is a lightweight mirror of the parent agent: it always copies the
+   * parent's current modelAlias, thinkingLevel, systemPrompt, and tools.
+   * It does NOT use the subagent profile-based cost-optimization path, because
+   * BTW is meant for quick follow-up questions in the same context, not for
+   * delegated tasks.
+   */
   async startBtw(): Promise<string> {
     const parent = await this.session.ensureAgentResumed(this.ownerAgentId);
     const { id, agent: child } = await this.session.createAgent(
@@ -264,7 +284,7 @@ export class SessionSubagentHost {
     return metadata.swarmItem;
   }
 
-  private resolveProfile(parent: Agent, profileName: string): ResolvedAgentProfile {
+  protected resolveProfile(parent: Agent, profileName: string): ResolvedAgentProfile {
     const profile =
       DEFAULT_AGENT_PROFILES[parent.config.profileName ?? 'agent']?.subagents?.[profileName] ??
       DEFAULT_AGENT_PROFILES['agent']?.subagents?.[profileName];
@@ -356,12 +376,17 @@ export class SessionSubagentHost {
     parent: Agent,
     child: Agent,
     profile: ResolvedAgentProfile,
+    options: SpawnSubagentOptions,
   ): Promise<void> {
-    // A subagent always inherits the parent agent's model.
+    const configDefaults = parent.kimiConfig?.agentDefaults;
     child.config.update({
       cwd: parent.config.cwd,
-      modelAlias: parent.config.modelAlias,
-      thinkingLevel: parent.config.thinkingLevel,
+      modelAlias:
+        options.modelAlias ??
+        profile.modelAlias ??
+        configDefaults?.[profile.name] ??
+        parent.config.modelAlias,
+      thinkingLevel: profile.thinkingLevel ?? parent.config.thinkingLevel,
     });
 
     const context = await prepareSystemPromptContext(

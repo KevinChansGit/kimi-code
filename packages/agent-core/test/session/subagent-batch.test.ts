@@ -230,6 +230,40 @@ describe('SubagentBatch scheduling contract', () => {
     }
   });
 
+  it('passes modelAlias through spawnOptions for batch tasks', async () => {
+    const { runBatch, attempts } = createMockBatchRunner();
+    const running = runBatch(
+      [
+        {
+          kind: 'spawn',
+          data: 1,
+          profileName: 'coder',
+          parentToolCallId: 'call_swarm',
+          prompt: 'Review item-1',
+          description: 'Review #1',
+          runInBackground: false,
+          modelAlias: 'deepseek-v4-flash',
+        },
+      ],
+      { signal },
+    );
+
+    await vi.waitFor(() => {
+      expect(attempts).toHaveLength(1);
+    });
+
+    expect(attempts[0]!.modelAlias).toBe('deepseek-v4-flash');
+
+    attempts[0]!.outcome.resolve({
+      task: attempts[0]!.task,
+      agentId: 'agent-1',
+      status: 'completed',
+      result: 'completed 1',
+    });
+
+    await expect(running).resolves.toHaveLength(1);
+  });
+
   it('rate-limit phase requeues 429 tasks, emits suspended, and throttles launches', async () => {
     vi.useFakeTimers();
     try {
@@ -749,6 +783,7 @@ type MockAttemptRecord = {
   readonly retryAgentId?: string;
   readonly markReady: () => void;
   readonly outcome: ReturnType<typeof createControlledPromise<MockAttemptOutcome<number>>>;
+  readonly modelAlias?: string;
 };
 
 type MockBatchRunnerOptions = {
@@ -803,12 +838,15 @@ function createMockBatchRunner(
   const host = {
     spawn: async (spawnOptions: SpawnSubagentOptions) => {
       const task = findMockTask(activeTasks, spawnOptions);
-      return createHandle(
+      const handle = createHandle(
         spawnOptions,
         mockAgentId(task, attempts.length),
         spawnOptions.profileName,
         false,
       );
+      // Record the modelAlias that was passed through spawnOptions for verification
+      (attempts[attempts.length - 1] as MockAttemptRecord).modelAlias = spawnOptions.modelAlias;
+      return handle;
     },
     resume: async (agentId: string, runOptions: RunSubagentOptions) =>
       createHandle(runOptions, agentId, 'subagent', true),

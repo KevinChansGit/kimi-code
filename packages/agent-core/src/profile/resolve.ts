@@ -10,6 +10,8 @@ import type {
 interface MergedAgentProfile {
   readonly name: string;
   readonly description?: string | undefined;
+  readonly modelAlias?: string | undefined;
+  readonly thinkingLevel?: string | undefined;
   readonly systemPromptTemplate: string;
   readonly promptVars: Record<string, string>;
   readonly tools: string[];
@@ -46,7 +48,7 @@ export function resolveAgentProfiles(
     resolvedCache.set(profile.name, toResolvedProfile(merged));
   }
 
-  applySubagentDescriptions(mergedCache, resolvedCache);
+  applySubagentOverrides(mergedCache, resolvedCache);
   linkResolvedSubagents(mergedCache, resolvedCache);
 
   const result: Record<string, ResolvedAgentProfile> = {};
@@ -99,6 +101,8 @@ function resolveMergedProfile(
     },
     tools: profile.tools !== undefined ? [...profile.tools] : [...(parent?.tools ?? [])],
     whenToUse: profile.whenToUse ?? parent?.whenToUse,
+    modelAlias: profile.modelAlias ?? parent?.modelAlias,
+    thinkingLevel: profile.thinkingLevel ?? parent?.thinkingLevel,
     subagents: cloneSubagents(profile.subagents),
   };
 
@@ -110,6 +114,8 @@ function toResolvedProfile(merged: MergedAgentProfile): ResolvedAgentProfile {
   return {
     name: merged.name,
     description: merged.description,
+    modelAlias: merged.modelAlias,
+    thinkingLevel: merged.thinkingLevel,
     systemPrompt: createSystemPromptRenderer(merged),
     tools: [...merged.tools],
     whenToUse: merged.whenToUse,
@@ -165,7 +171,7 @@ function buildTemplateVars(
   };
 }
 
-function applySubagentDescriptions(
+function applySubagentOverrides(
   mergedProfiles: Map<string, MergedAgentProfile>,
   resolvedProfiles: Map<string, ResolvedAgentProfile>,
 ): void {
@@ -176,8 +182,19 @@ function applySubagentDescriptions(
       if (target === undefined) {
         throwMissingSubagent(ownerName, subagentName);
       }
-      if (target.description === undefined && subagent.description !== undefined) {
+      // Copy description from parent subagent entry to target (for YAML-configured subagents).
+      // An explicit empty string is treated as "no value" and will be overwritten.
+      if (!target.description && subagent.description !== undefined) {
         target.description = subagent.description;
+      }
+      // Copy modelAlias from parent subagent entry to target (for cost-optimized model routing).
+      // An explicit empty string is treated as "no value" and will be overwritten.
+      if (!target.modelAlias && subagent.modelAlias !== undefined) {
+        target.modelAlias = subagent.modelAlias;
+      }
+      // Copy thinkingLevel from parent subagent entry to target (for model-specific thinking configuration).
+      if (!target.thinkingLevel && subagent.thinkingLevel !== undefined) {
+        target.thinkingLevel = subagent.thinkingLevel;
       }
     }
   }

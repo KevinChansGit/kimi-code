@@ -1032,6 +1032,9 @@ describe('SessionSubagentHost', () => {
       initialConfig: {
         providers: {},
         loopControl: { maxRetriesPerStep: 1 },
+        models: {
+          'child-model': { provider: 'test-provider', model: 'child-model', maxContextSize: 1000000, capabilities: [] },
+        },
       },
     });
     child.configure();
@@ -1062,12 +1065,19 @@ describe('SessionSubagentHost', () => {
     expect(userTextMessages(histories[1] ?? [])).toEqual(['Implement the retry-safe change']);
   });
 
-  it('realigns a resumed subagent to the parent agent current model', async () => {
+  it('preserves the subagent modelAlias on resume', async () => {
     const parent = testAgent();
     parent.configure();
     parent.agent.permission.setMode('yolo');
 
-    const child = testAgent();
+    const child = testAgent({
+    initialConfig: {
+      providers: {},
+      models: {
+      'stale-model-from-initial-spawn': { provider: 'test-provider', model: 'stale-model-from-initial-spawn', maxContextSize: 1000000, capabilities: [] },
+      },
+    },
+    });
     child.configure({ tools: ['Read'] });
     // The child was originally spawned with a model that no longer matches the
     // parent agent's current model (as if the parent ran setModel afterwards).
@@ -1099,12 +1109,282 @@ describe('SessionSubagentHost', () => {
     });
 
     await handle.completion;
-    // resume must realign the child to the parent agent's current model rather
-    // than leave it on the stale model from its initial spawn.
-    expect(child.agent.config.modelAlias).toBe(parent.agent.config.modelAlias);
-    expect(child.agent.config.modelAlias).not.toBe('stale-model-from-initial-spawn');
+    // A resumed subagent keeps its own modelAlias; it is not realigned to the
+    // parent agent's current model so that profile-declared cost-optimized
+    // models are preserved across resume/retry cycles.
+    expect(child.agent.config.modelAlias).toBe('stale-model-from-initial-spawn');
+    expect(child.agent.config.modelAlias).not.toBe(parent.agent.config.modelAlias);
+  });
+
+  it('spawns a subagent with fallback to parent modelAlias', async () => {
+    const parent = testAgent();
+    parent.configure();
+    parent.agent.config.update({ modelAlias: 'parent-model' });
+
+    const child = testAgent({
+      initialConfig: {
+        providers: {
+          'test-provider': { type: 'kimi', apiKey: 'test-key' },
+        },
+        models: {
+          'parent-model': { provider: 'test-provider', model: 'parent-model', maxContextSize: 1000000, capabilities: [] },
+        },
+      },
+    });
+    const session = fakeSession(parent.agent, child.agent);
+    const host = new SessionSubagentHost(session, 'main');
+
+    child.mockNextResponse({
+      type: 'text',
+      text: 'Completed with profile model.',
+    });
+    child.mockNextResponse({
+      type: 'text',
+      text: 'Completed with profile model.',
+    });
+
+    const handle = await host.spawn({
+      profileName: 'coder',
+      parentToolCallId: 'call_agent',
+      prompt: 'Do work',
+      description: 'Do work',
+      runInBackground: false,
+      signal,
+    });
+    await handle.completion;
+
+    // Profile has no modelAlias, so it falls back to parent
+    expect(child.agent.config.modelAlias).toBe('parent-model');
+  });
+
+  it('preserves subagent modelAlias on retry after a rate limit', async () => {
+    const parent = testAgent({
+      initialConfig: {
+        providers: {
+          'test-provider': { type: 'kimi', apiKey: 'test-key' },
+        },
+        models: {
+          'parent-model': { provider: 'test-provider', model: 'parent-model', maxContextSize: 1000000, capabilities: [] },
+        },
+      },
+    });
+    parent.configure();
+    parent.agent.config.update({ modelAlias: 'parent-model' });
+    parent.agent.permission.setMode('yolo');
+
+    const summary =
+      'Implemented the retry-safe change completely and returned a detailed enough summary for the parent to continue confidently. '.repeat(3);
+    let generateCalls = 0;
+    const generate: GenerateFn = async (_chat, _systemPrompt, _tools, _history, callbacks) => {
+      generateCalls += 1;
+      if (generateCalls === 1) {
+        throw new APIStatusError(429, 'Rate limited', 'Rate limited');
+      }
+      await callbacks?.onMessagePart?.({ type: 'text', text: summary });
+      return textResult(summary);
+    };
+
+    const child = testAgent({
+      generate,
+      initialConfig: {
+        providers: {
+          'test-provider': { type: 'kimi', apiKey: 'test-key' },
+        },
+        models: {
+          'child-model': { provider: 'test-provider', model: 'child-model', maxContextSize: 1000000, capabilities: [] },
+        },
+        loopControl: { maxRetriesPerStep: 0 },
+      },
+    });
+    child.configure({ tools: ['Read'] });
+    child.agent.useProfile(
+      profile({ name: 'coder', tools: ['Read'], systemPrompt: 'coder prompt' }),
+    );
+
+    const session = fakeSession(parent.agent, child.agent, {
+      'agent-0': {
+        homedir: '/tmp/kimi-session/agents/agent-0',
+        type: 'sub',
+        parentAgentId: 'main',
+      },
+    });
+    const host = new SessionSubagentHost(session, 'main');
+
+    // Pass modelAlias via spawn options to test the runtime override path
+    const handle = await host.spawn({
+      profileName: 'coder',
+      parentToolCallId: 'call_agent',
+      prompt: 'Implement the retry-safe change',
+      description: 'Fix rate-limit retry',
+      runInBackground: false,
+      signal,
+      modelAlias: 'child-model',
+    });
+    await expect(handle.completion).rejects.toThrow('Rate limited');
+
+    const retryHandle = await host.retry(handle.agentId, {
+      parentToolCallId: 'call_agent',
+      prompt: 'Implement the retry-safe change',
+      description: 'Fix rate-limit retry',
+      runInBackground: false,
+      signal,
+    });
+
+    await expect(retryHandle.completion).resolves.toMatchObject({ result: summary.trim() });
+    expect(generateCalls).toBe(2);
+    expect(child.agent.config.modelAlias).toBe('child-model');
+  });
+
+  it('spawns a subagent with profile-declared modelAlias', async () => {
+    const parent = testAgent();
+    parent.configure();
+    parent.agent.config.update({ modelAlias: 'parent-model' });
+
+    const child = testAgent({
+      initialConfig: {
+        providers: {
+          'test-provider': { type: 'kimi', apiKey: 'test-key' },
+        },
+        models: {
+          'profile-model': { provider: 'test-provider', model: 'profile-model', maxContextSize: 1000000, capabilities: [] },
+        },
+      },
+    });
+
+    const session = fakeSession(parent.agent, child.agent);
+    const host = new TestSubagentHost(session, 'main', profile({
+      name: 'coder',
+      tools: ['Read'],
+      systemPrompt: 'coder prompt',
+      modelAlias: 'profile-model',
+    }));
+
+    child.mockNextResponse({
+      type: 'text',
+      text: 'Completed with profile-declared model. The summary is deliberately made very long to ensure it exceeds the minimum length threshold for subagent completion and avoids any re-prompting behavior that would cause unexpected generate calls.',
+    });
+
+    const handle = await host.spawn({
+      profileName: 'coder',
+      parentToolCallId: 'call_agent',
+      prompt: 'Do work',
+      description: 'Do work',
+      runInBackground: false,
+      signal,
+    });
+    await handle.completion;
+
+    // Profile declares modelAlias, so it takes precedence over parent fallback
+    expect(child.agent.config.modelAlias).toBe('profile-model');
+  });
+
+  it('spawns a subagent with agentDefaults fallback', async () => {
+    const parent = testAgent({
+      initialConfig: {
+        providers: {
+          'test-provider': { type: 'kimi', apiKey: 'test-key' },
+        },
+        models: {
+          'default-coder-model': { provider: 'test-provider', model: 'default-coder-model', maxContextSize: 1000000, capabilities: [] },
+        },
+        agentDefaults: {
+          coder: 'default-coder-model',
+        },
+      },
+    });
+    parent.configure();
+    parent.agent.config.update({ modelAlias: 'parent-model' });
+
+    const child = testAgent({
+      initialConfig: {
+        providers: {
+          'test-provider': { type: 'kimi', apiKey: 'test-key' },
+        },
+        models: {
+          'default-coder-model': { provider: 'test-provider', model: 'default-coder-model', maxContextSize: 1000000, capabilities: [] },
+        },
+      },
+    });
+    const session = fakeSession(parent.agent, child.agent);
+    const host = new SessionSubagentHost(session, 'main');
+
+    child.mockNextResponse({
+      type: 'text',
+      text: 'Completed with agentDefaults model. The summary is deliberately made very long to ensure it exceeds the minimum length threshold for subagent completion and avoids any re-prompting behavior that would cause unexpected generate calls.',
+    });
+
+    const handle = await host.spawn({
+      profileName: 'coder',
+      parentToolCallId: 'call_agent',
+      prompt: 'Do work',
+      description: 'Do work',
+      runInBackground: false,
+      signal,
+    });
+    await handle.completion;
+
+    // agentDefaults provides the fallback since profile has no modelAlias and options has none
+    expect(child.agent.config.modelAlias).toBe('default-coder-model');
+  });
+
+  it('spawns a subagent with profile-declared thinkingLevel', async () => {
+    const parent = testAgent();
+    parent.configure();
+    parent.agent.config.update({ modelAlias: 'parent-model', thinkingLevel: 'max' });
+
+    const child = testAgent({
+      initialConfig: {
+        providers: {
+          'test-provider': { type: 'kimi', apiKey: 'test-key' },
+        },
+        models: {
+          'profile-model': { provider: 'test-provider', model: 'profile-model', maxContextSize: 1000000, capabilities: [] },
+        },
+      },
+    });
+
+    const session = fakeSession(parent.agent, child.agent);
+    const host = new TestSubagentHost(session, 'main', profile({
+      name: 'coder',
+      tools: ['Read'],
+      systemPrompt: 'coder prompt',
+      modelAlias: 'profile-model',
+      thinkingLevel: 'off',
+    }));
+
+    child.mockNextResponse({
+      type: 'text',
+      text: 'Completed with profile-declared thinkingLevel. The summary is deliberately made very long to ensure it exceeds the minimum length threshold for subagent completion and avoids any re-prompting behavior that would cause unexpected generate calls.',
+    });
+
+    const handle = await host.spawn({
+      profileName: 'coder',
+      parentToolCallId: 'call_agent',
+      prompt: 'Do work',
+      description: 'Do work',
+      runInBackground: false,
+      signal,
+    });
+    await handle.completion;
+
+    // Profile declares thinkingLevel, so it takes precedence over parent
+    expect(child.agent.config.thinkingLevel).toBe('off');
   });
 });
+
+class TestSubagentHost extends SessionSubagentHost {
+  constructor(
+    session: Session,
+    ownerAgentId: string,
+    private readonly customProfile: ResolvedAgentProfile,
+  ) {
+    super(session, ownerAgentId);
+  }
+
+  protected resolveProfile(_parent: Agent, _profileName: string): ResolvedAgentProfile {
+    return this.customProfile;
+  }
+}
 
 describe('Session resume permission parent chain', () => {
   it('restores subagent live-derived permission when metadata lists the child first', async () => {
@@ -1550,11 +1830,15 @@ function profile(input: {
   readonly tools: readonly string[];
   readonly systemPrompt: string;
   readonly description?: string | undefined;
+  readonly modelAlias?: string | undefined;
+  readonly thinkingLevel?: string | undefined;
   readonly subagents?: Record<string, ResolvedAgentProfile> | undefined;
 }): ResolvedAgentProfile {
   return {
     name: input.name,
     description: input.description,
+    modelAlias: input.modelAlias,
+    thinkingLevel: input.thinkingLevel,
     systemPrompt: () => input.systemPrompt,
     tools: [...input.tools],
     subagents: input.subagents,

@@ -1,4 +1,7 @@
-# Kimi Code CLI
+# Kimi Code CLI (Custom Fork)
+
+> **⚠️ This is a custom fork of [Moonshot AI Kimi Code CLI](https://github.com/MoonshotAI/kimi-code).**  
+> This build adds cost-optimized subagent model routing and per-profile thinking-level configuration. Auto-update and upstream feedback are disabled. See the [Custom Features](#custom-features) section below for details.
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Docs](https://img.shields.io/badge/docs-online-blue)](https://moonshotai.github.io/kimi-code/en/) <br>
 [Documentation](https://moonshotai.github.io/kimi-code/en/) · [Issues](https://github.com/MoonshotAI/kimi-code/issues) · [中文](README.zh-CN.md)
@@ -7,39 +10,72 @@
 
 ## What is Kimi Code CLI
 
-Kimi Code CLI is an AI coding agent that runs in your terminal — it can read and edit code, run shell commands, search files, fetch web pages, and choose the next step based on the feedback it receives. It works out of the box with Moonshot AI’s Kimi models and can also be configured to use other compatible providers.
+Kimi Code CLI is an AI coding agent that runs in your terminal — it can read and edit code, run shell commands, search files, fetch web pages, and choose the next step based on the feedback it receives. It works out of the box with Moonshot AI's Kimi models and can also be configured to use other compatible providers.
+
+## Custom Features
+
+This fork adds the following capabilities on top of the upstream Kimi Code CLI:
+
+- **Subagent model routing.** Built-in subagents (`coder`, `explore`, `plan`) can be configured to use different models than the main agent. For example, the main agent can use a powerful model (e.g. Kimi K2.5) while subagents use cost-optimized models (e.g. DeepSeek V4 Flash), reducing API costs without sacrificing quality on the main reasoning path.
+- **Per-profile thinking-level configuration.** Each subagent profile can declare its own `thinkingLevel` (e.g. `off` / `low` / `medium` / `high` / `max`), independent of the main agent's setting. Useful for tuning reasoning depth per task type.
+- **Runtime model override.** `spawn` options accept a `modelAlias` parameter to override the profile-declared model on a per-invocation basis.
+- **Config-level agent defaults.** The `config.toml` `[agent_defaults]` section lets you assign a default model alias to any agent by name, without creating a separate profile file.
+- **Disabled auto-update.** The built-in `kimi update` command is disabled to prevent overwriting this custom build with upstream binaries. Run `git pull` and `pnpm build` to update from source instead.
+- **Disabled upstream feedback.** The feedback command is routed to a no-op URL to avoid sending custom-build issues to the upstream repository.
+
+### Built-in subagent configuration (recommended in `config.toml`)
+
+The built-in subagents (`coder`, `explore`, `plan`) can be assigned different models via the `config.toml` `[agent_defaults]` section. The bundled profile does not hard-code any provider-specific model names — you configure them in your own config.
+
+Recommended default for cost-optimized routing:
+
+| Subagent | Suggested model | Thinking level | Rationale |
+|----------|--------------|----------------|-----------|
+| `coder` | `deepseek-v4-flash` | `max` | High-throughput code editing; reasoning compensates for cheaper model |
+| `explore` | `deepseek-v4-flash` | `max` | Fast read-only exploration; max reasoning for accurate analysis |
+| `plan` | `deepseek-v4-pro` | `max` | Stronger model for architecture planning; pro over flash for design quality |
+
+Add this to your `config.toml`:
+
+```toml
+[agent_defaults]
+coder = "deepseek-v4-flash"
+explore = "deepseek-v4-flash"
+plan = "deepseek-v4-pro"
+
+[models.deepseek-v4-flash]
+provider = "deepseek"
+model = "deepseek-v4-flash"
+max_context_size = 64000
+
+[models.deepseek-v4-pro]
+provider = "deepseek"
+model = "deepseek-v4-pro"
+max_context_size = 64000
+
+[providers.deepseek]
+type = "openai"
+api_key = "YOUR_API_KEY"
+```
+
+Alternatively, you can create custom agent profile YAML files with `modelAlias` and `thinkingLevel` fields — the profile loader supports both `extends` inheritance and per-subagent overrides.
 
 ## Install
 
-Install with the official script. No Node.js required.
-
-- **macOS or Linux**:
+**This fork must be built from source.** There is no CDN-hosted binary. You need Node.js ≥ 24.15.0 and pnpm 10.33.0.
 
 ```sh
-curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash
+git clone <your-fork-url>
+cd kimi-code
+pnpm install
+pnpm build
 ```
 
-- **Homebrew (macOS/Linux)**:
+Then add the built CLI to your PATH. On Windows, add `apps\kimi-code\dist` to your user PATH. On macOS/Linux, create a symlink:
 
 ```sh
-brew install kimi-code
+ln -s $(pwd)/apps/kimi-code/dist/kimi ~/bin/kimi
 ```
-
-- **Windows (PowerShell)**:
-
-```powershell
-irm https://code.kimi.com/kimi-code/install.ps1 | iex
-```
-
-> On Windows, install [Git for Windows](https://gitforwindows.org/) before first launch because Kimi Code CLI uses the bundled Git Bash as its shell environment. If Git Bash is installed in a custom location, set `KIMI_SHELL_PATH` to the absolute path of `bash.exe`.
-
-Then, run it with a new shell session:
-
-```sh
-kimi --version
-```
-
-For npm install, upgrade, uninstall, see [Getting Started](https://moonshotai.github.io/kimi-code/en/guides/getting-started).
 
 ## Quick Start
 
