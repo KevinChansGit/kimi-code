@@ -40,7 +40,7 @@ const { t } = useI18n();
 const debugEnabled = isTraceEnabled();
 
 // Narrow viewports (≤640px) render the single-column mobile shell; desktop is
-// unchanged. jsdom defaults to false (desktop) so component tests are unaffected.
+// unchanged. Falls back to desktop when matchMedia is unavailable.
 const isMobile = useIsMobile();
 
 // Mobile sheet visibility
@@ -109,7 +109,8 @@ function blinkAuthLogo(): void {
 }
 
 
-// Dynamic page title: session title first, then workspace name, then app name.
+// Static page title (app name only). The session title and workspace name are
+// intentionally excluded so the tab title stays stable.
 // Prefix an animated spinner when the agent is running so users can see activity
 // at a glance.
 const SPINNER_FRAMES = ['◐', '◓', '◑', '◒'];
@@ -140,10 +141,6 @@ watch(running, (isRunning) => {
 const pageTitle = computed<string>(() => {
   const prefix = running.value ? `${SPINNER_FRAMES[spinnerFrame.value]} ` : '';
   if (showAuthGate.value) return `${prefix}${t('app.authPageTitle')} - Kimi Code Web`;
-  const sessionTitle = activeSessionTitle.value;
-  if (sessionTitle) return `${prefix}${sessionTitle} - Kimi Code Web`;
-  const workspaceName = client.visibleWorkspace.value?.name;
-  if (workspaceName) return `${prefix}${workspaceName} - Kimi Code Web`;
   return `${prefix}Kimi Code Web`;
 });
 watchEffect(() => {
