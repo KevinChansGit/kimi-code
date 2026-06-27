@@ -1,4 +1,7 @@
-# Kimi Code CLI
+# Kimi Code CLI (Custom Fork)
+
+> **⚠️ 这是 [Moonshot AI Kimi Code CLI](https://github.com/MoonshotAI/kimi-code) 的自定义魔改版。**  
+> 本构建新增了成本优化的子 Agent 模型路由（modelAlias）和按配置文件的思考深度（thinkingLevel）配置。自动更新和上游反馈功能已禁用。详情见下方 [自定义特性](#自定义特性) 章节。
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![Docs](https://img.shields.io/badge/docs-online-blue)](https://moonshotai.github.io/kimi-code/zh/)
 
@@ -12,37 +15,70 @@
 
 Kimi Code CLI 是一个运行在终端里的 AI 编程 agent，可以帮你读写代码、执行 shell 命令、检索文件、抓取网页，并根据反馈自主决定下一步动作。开箱即用对接 Moonshot AI 的 Kimi 模型，也可指向其他兼容厂商。
 
+## 自定义特性
+
+本分支在 Kimi Code CLI 上游基础上新增了以下能力：
+
+- **子 Agent 模型路由。** 内置子 Agent（`coder`、`explore`、`plan`）可以配置与主 Agent 不同的模型。例如主 Agent 使用强力模型（如 Kimi K2.5），而子 Agent 使用成本优化的模型（如 DeepSeek V4 Flash），在不牺牲主推理路径质量的前提下降低 API 费用。
+- **按配置文件的思考深度（thinkingLevel）配置。** 每个子 Agent 配置可以声明独立的 `thinkingLevel`（如 `off` / `low` / `medium` / `high` / `max`），与主 Agent 的设置无关。便于按任务类型精细调整推理深度。
+- **运行时模型覆盖。** `spawn` 参数支持传入 `modelAlias` 以在单次调用时覆盖配置声明的模型。
+- **配置级 Agent 默认值。** `config.toml` 的 `[agent_defaults]` 段落可直接按 Agent 名称分配默认模型别名，无需创建单独的配置文件。
+- **禁用自动更新。** 内置 `kimi update` 命令已禁用，防止本分支被上游二进制覆盖。如需更新，请通过 `git pull` + `pnpm build` 从源码重新构建。
+- **禁用上游反馈。** 反馈命令已路由至无效 URL，避免将本分支的问题发送给上游仓库。
+
+### 内置子 Agent 推荐配置（通过 `config.toml`）
+
+内置子 Agent 可通过 `config.toml` 的 `[agent_defaults]` 分配不同模型。打包的配置文件未硬编码任何厂商特定模型名，由用户自行配置。
+
+推荐的成本优化默认：
+
+| 子 Agent | 建议模型 | 思考深度 | 说明 |
+|----------|---------|---------|------|
+| `coder` | `deepseek-v4-flash` | `max` | 高吞吐代码编辑；max 推理深度补偿廉价模型 |
+| `explore` | `deepseek-v4-flash` | `max` | 快速只读探索；max 推理深度保证分析准确 |
+| `plan` | `deepseek-v4-pro` | `max` | 架构规划使用更强模型；pro 优于 flash 保证设计质量 |
+
+在 `config.toml` 中添加：
+
+```toml
+[agent_defaults]
+coder = "deepseek-v4-flash"
+explore = "deepseek-v4-flash"
+plan = "deepseek-v4-pro"
+
+[models.deepseek-v4-flash]
+provider = "deepseek"
+model = "deepseek-v4-flash"
+max_context_size = 64000
+
+[models.deepseek-v4-pro]
+provider = "deepseek"
+model = "deepseek-v4-pro"
+max_context_size = 64000
+
+[providers.deepseek]
+type = "openai"
+api_key = "YOUR_API_KEY"
+```
+
+也可以通过创建自定义 Agent 配置文件（YAML）并声明 `modelAlias` 和 `thinkingLevel` 字段来覆盖。配置加载器支持 `extends` 继承和按子 Agent 条目覆盖。
+
 ## 安装
 
-推荐使用官方安装脚本，不需要提前安装 Node.js。
-
-- **macOS / Linux**：
+**本分支必须从源码构建。** 没有 CDN 托管的二进制文件。需要 Node.js ≥ 24.15.0 和 pnpm 10.33.0。
 
 ```sh
-curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash
+git clone <your-fork-url>
+cd kimi-code
+pnpm install
+pnpm build
 ```
 
-- **Homebrew（macOS / Linux）**：
+然后将构建好的 CLI 加入 PATH。Windows 用户将 `apps\kimi-code\dist` 添加到用户 PATH；macOS/Linux 用户创建符号链接：
 
 ```sh
-brew install kimi-code
+ln -s $(pwd)/apps/kimi-code/dist/kimi ~/bin/kimi
 ```
-
-- **Windows（PowerShell）**：
-
-```powershell
-irm https://code.kimi.com/kimi-code/install.ps1 | iex
-```
-
-> Windows 用户首次启动前还需要安装 [Git for Windows](https://gitforwindows.org/)，Kimi Code CLI 会使用其中的 Git Bash 作为 Shell 环境。如果 Git Bash 安装在非标准路径，请把 `KIMI_SHELL_PATH` 设为 `bash.exe` 的绝对路径。
-
-随后在新的终端会话中运行：
-
-```sh
-kimi --version
-```
-
-npm 安装、升级、卸载方式，见[快速上手](https://moonshotai.github.io/kimi-code/zh/guides/getting-started)。
 
 ## 快速开始
 
