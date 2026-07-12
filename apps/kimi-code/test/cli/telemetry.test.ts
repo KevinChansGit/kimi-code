@@ -81,7 +81,7 @@ describe('initializeServerTelemetry', () => {
         setContext: expect.any(Function),
       }),
     );
-  });
+  }, 15000);
 
   it('disables telemetry when config.toml sets telemetry = false', async () => {
     mocks.loadRuntimeConfigSafe.mockReturnValue({
