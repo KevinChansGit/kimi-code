@@ -580,12 +580,16 @@ export class OpenAILegacyChatProvider implements ChatProvider {
       }
     }
 
+    // Extract extra_body for OpenAI SDK request options (used by providers like DeepSeek
+    // that require extra_body.thinking to enable thinking mode).
+    const { extra_body: extraBody, ...restKwargs } = kwargs;
+
     // Build the create params
     const createParams: Record<string, unknown> = {
       model: this._model,
       messages,
       stream: this._stream,
-      ...kwargs,
+      ...restKwargs,
     };
     if (options?.responseFormat !== undefined) {
       createParams['response_format'] = responseFormatToOpenAI(options.responseFormat);
@@ -606,9 +610,16 @@ export class OpenAILegacyChatProvider implements ChatProvider {
     try {
       const client = this._createClient(options?.auth);
       options?.onRequestSent?.();
+      const requestOptions: Record<string, unknown> = {};
+      if (options?.signal) {
+        requestOptions['signal'] = options.signal;
+      }
+      if (extraBody) {
+        requestOptions['extra_body'] = extraBody;
+      }
       const response = (await client.chat.completions.create(
         createParams as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
-        options?.signal ? { signal: options.signal } : undefined,
+        Object.keys(requestOptions).length > 0 ? (requestOptions as OpenAI.RequestOptions) : undefined,
       )) as unknown as OpenAI.Chat.ChatCompletion | AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
       return new OpenAILegacyStreamedMessage(response, this._stream, this._reasoningKey);
     } catch (error: unknown) {
@@ -620,6 +631,28 @@ export class OpenAILegacyChatProvider implements ChatProvider {
     const reasoningEffort = thinkingEffortToReasoningEffort(effort);
     const clone = this._clone();
     clone._reasoningEffort = reasoningEffort;
+
+    // For providers like DeepSeek that require extra_body.thinking to enable thinking mode,
+    // we set extra_body.thinking.type = 'enabled' when thinking is on.
+    const extraBody = (clone._generationKwargs['extra_body'] ?? {}) as Record<string, unknown>;
+    if (effort !== 'off') {
+      clone._generationKwargs = {
+        ...clone._generationKwargs,
+        extra_body: { ...extraBody, thinking: { type: 'enabled' } },
+      };
+    } else {
+      const { thinking: _, ...rest } = extraBody;
+      if (Object.keys(rest).length > 0) {
+        clone._generationKwargs = {
+          ...clone._generationKwargs,
+          extra_body: rest,
+        };
+      } else {
+        const newKwargs = { ...clone._generationKwargs };
+        delete newKwargs['extra_body'];
+        clone._generationKwargs = newKwargs;
+      }
+    }
     return clone;
   }
 

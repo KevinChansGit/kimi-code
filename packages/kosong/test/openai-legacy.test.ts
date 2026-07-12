@@ -49,8 +49,11 @@ async function captureRequestBody(
 
   (provider as any)._client.chat.completions.create = vi
     .fn()
-    .mockImplementation((params: unknown) => {
-      capturedBody = params as Record<string, unknown>;
+    .mockImplementation((params: unknown, opts: unknown) => {
+      const body = params as Record<string, unknown>;
+      const requestOpts = (opts ?? {}) as Record<string, unknown>;
+      const extraBody = requestOpts['extra_body'] as Record<string, unknown> | undefined;
+      capturedBody = { ...body, ...extraBody };
       return Promise.resolve(makeChatCompletionResponse());
     });
 
@@ -899,7 +902,7 @@ describe('OpenAILegacyChatProvider', () => {
   });
 
   describe('with thinking', () => {
-    it('.withThinking("high") sets reasoning_effort', async () => {
+    it('.withThinking("high") sets reasoning_effort and extra_body.thinking', async () => {
       const provider = createProvider().withThinking('high');
       const history: Message[] = [
         { role: 'user', content: [{ type: 'text', text: 'Think' }], toolCalls: [] },
@@ -907,6 +910,7 @@ describe('OpenAILegacyChatProvider', () => {
       const body = await captureRequestBody(provider, '', [], history);
 
       expect(body['reasoning_effort']).toBe('high');
+      expect(body['thinking']).toEqual({ type: 'enabled' });
     });
 
     it.each(['deepseek/deepseek-v4-flash', 'gpt-5.4-pro', 'some-model'])(
@@ -919,11 +923,12 @@ describe('OpenAILegacyChatProvider', () => {
         const body = await captureRequestBody(provider, '', [], history);
 
         expect(body['reasoning_effort']).toBe('xhigh');
+        expect(body['thinking']).toEqual({ type: 'enabled' });
         expect(provider.thinkingEffort).toBe('xhigh');
       },
     );
 
-    it('.withThinking("max") maps to xhigh without model-specific clamping', async () => {
+    it('.withThinking("max") maps to max without model-specific clamping', async () => {
       const history: Message[] = [
         { role: 'user', content: [{ type: 'text', text: 'Think' }], toolCalls: [] },
       ];
@@ -947,9 +952,14 @@ describe('OpenAILegacyChatProvider', () => {
         history,
       );
 
-      expect(openAIChatModel['reasoning_effort']).toBe('xhigh');
-      expect(openAIProModel['reasoning_effort']).toBe('xhigh');
-      expect(deepSeekModel['reasoning_effort']).toBe('xhigh');
+      expect(openAIChatModel['reasoning_effort']).toBe('max');
+      expect(openAIProModel['reasoning_effort']).toBe('max');
+      expect(deepSeekModel['reasoning_effort']).toBe('max');
+
+      // DeepSeek-style providers also need extra_body.thinking.type = 'enabled'
+      expect(openAIChatModel['thinking']).toEqual({ type: 'enabled' });
+      expect(openAIProModel['thinking']).toEqual({ type: 'enabled' });
+      expect(deepSeekModel['thinking']).toEqual({ type: 'enabled' });
     });
   });
 

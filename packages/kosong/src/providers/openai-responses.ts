@@ -1136,7 +1136,12 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
   }
 
   withThinking(effort: ThinkingEffort): OpenAIResponsesChatProvider {
-    const reasoningEffort = thinkingEffortToReasoningEffort(effort);
+    let reasoningEffort = thinkingEffortToReasoningEffort(effort);
+    // OpenAI Responses API does not accept 'max'; clamp to the highest
+    // supported effort 'xhigh'.
+    if (reasoningEffort === 'max') {
+      reasoningEffort = 'xhigh';
+    }
     const clone = this._clone();
     clone._generationKwargs = {
       ...clone._generationKwargs,
@@ -1144,7 +1149,6 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
     };
     return clone;
   }
-
   withGenerationKwargs(kwargs: OpenAIResponsesGenerationKwargs): OpenAIResponsesChatProvider {
     const clone = this._clone();
     clone._generationKwargs = { ...clone._generationKwargs, ...kwargs };

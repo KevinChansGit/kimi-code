@@ -165,8 +165,9 @@ export function thinkingEffortToReasoningEffort(effort: ThinkingEffort): string 
     case 'high':
       return 'high';
     case 'xhigh':
-    case 'max':
       return 'xhigh';
+    case 'max':
+      return 'max';
     default:
       // 'on' (boolean models) or any model-declared effort OpenAI does not
       // recognize: send no reasoning_effort and let the model use its own
@@ -193,8 +194,9 @@ export function reasoningEffortToThinkingEffort(
     case 'high':
       return 'high';
     case 'xhigh':
-    case 'max':
       return 'xhigh';
+    case 'max':
+      return 'max';
     case 'none':
       return 'off';
     default:
