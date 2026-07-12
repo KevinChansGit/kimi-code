@@ -391,8 +391,11 @@ export class SessionSubagentHost {
         profile.modelAlias ??
         configDefaults?.[profile.name] ??
         parent.config.modelAlias,
-      thinkingEffort: profile.thinkingEffort ?? parent.config.thinkingEffort,
     });
+
+    if (profile.thinkingEffort !== undefined) {
+      child.config.update({ thinkingEffort: profile.thinkingEffort });
+    }
 
     const context = await prepareSystemPromptContext(
       this.session.systemContextKaos(child.kaos.getcwd()),

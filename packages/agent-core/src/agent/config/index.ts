@@ -67,10 +67,11 @@ export class ConfigState {
         this.currentModel,
       );
     } else if (changed.modelAlias !== undefined) {
-      // Re-apply the always_thinking clamp against the new model so a stale
-      // 'off' cannot survive a switch onto an always-thinking alias.
+      // Re-compute default thinking effort for the new model so a subagent
+      // switching to a different model does not carry over an inherited
+      // effort that the new model may not support.
       this._thinkingEffort = resolveThinkingEffort(
-        this._thinkingEffort,
+        undefined,
         this.agent.kimiConfig?.thinking,
         this.currentModel,
       );
