@@ -315,6 +315,8 @@ export function transformTomlData(data: Record<string, unknown>): Record<string,
       result[targetKey] = transformPlainObject(value);
     } else if (targetKey === 'image' && isPlainObject(value)) {
       result[targetKey] = transformPlainObject(value);
+    } else if (targetKey === 'agentDefaults' && isPlainObject(value)) {
+      result[targetKey] = cloneRecord(value);
     } else if (targetKey === 'experimental' && isPlainObject(value)) {
       result[targetKey] = cloneRecord(value);
     } else if (!isPlainObject(value)) {
@@ -489,6 +491,7 @@ export function configToTomlData(config: KimiConfig): Record<string, unknown> {
   setRecordSection(out, 'providers', config.providers, providerToToml);
   setRecordSection(out, 'models', config.models, modelToToml);
   setSection(out, 'thinking', config.thinking, thinkingToToml);
+  setDefined(out, 'agent_defaults', config.agentDefaults);
   setSection(out, 'services', config.services, servicesToToml);
   setSection(out, 'loop_control', config.loopControl, loopControlToToml);
   setSection(out, 'background', config.background, backgroundToToml);
