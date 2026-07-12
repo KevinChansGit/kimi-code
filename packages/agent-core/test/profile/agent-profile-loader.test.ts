@@ -201,12 +201,12 @@ tools:
     expect(profiles['worker']?.description).toBe('Worker subagent');
   });
 
-  it('inherits and overrides thinkingLevel through extends', async () => {
+  it('inherits and overrides thinkingEffort through extends', async () => {
     await write(
       'agent.yaml',
       `
 name: agent
-thinkingLevel: max
+thinkingEffort: max
 tools:
   - Read
 subagents:
@@ -219,7 +219,7 @@ subagents:
       `
 extends: agent
 name: coder
-thinkingLevel: off
+thinkingEffort: off
 tools:
   - Bash
 `,
@@ -238,7 +238,7 @@ tools:
       `
 name: shared
 systemPromptTemplate: shared prompt
-thinkingLevel: medium
+thinkingEffort: medium
 tools:
   - Read
 `,
@@ -251,18 +251,18 @@ tools:
       join(workDir, 'shared.yaml'),
     ]);
 
-    // Child profile overrides parent thinkingLevel
-    expect(profiles['coder']?.thinkingLevel).toBe('off');
-    // Child without thinkingLevel inherits from parent
-    expect(profiles['explore']?.thinkingLevel).toBe('max');
-    // Standalone profile keeps its own thinkingLevel
-    expect(profiles['shared']?.thinkingLevel).toBe('medium');
+    // Child profile overrides parent thinkingEffort
+    expect(profiles['coder']?.thinkingEffort).toBe('off');
+    // Child without thinkingEffort inherits from parent
+    expect(profiles['explore']?.thinkingEffort).toBe('max');
+    // Standalone profile keeps its own thinkingEffort
+    expect(profiles['shared']?.thinkingEffort).toBe('medium');
   });
 
-  it('copies thinkingLevel from parent subagent entry when target has none', async () => {
+  it('copies thinkingEffort from parent subagent entry when target has none', async () => {
     await write(
       'parent.yaml',
-      `\nname: parent\nsystemPromptTemplate: parent prompt\ntools:\n  - Read\nsubagents:\n  worker:\n    description: Worker subagent\n    thinkingLevel: low\n`,
+      `\nname: parent\nsystemPromptTemplate: parent prompt\ntools:\n  - Read\nsubagents:\n  worker:\n    description: Worker subagent\n    thinkingEffort: low\n`,
     );
     await write(
       'worker.yaml',
@@ -274,8 +274,8 @@ tools:
       join(workDir, 'worker.yaml'),
     ]);
 
-    // The worker profile has no thinkingLevel, so the parent subagent entry's thinkingLevel is copied
-    expect(profiles['worker']?.thinkingLevel).toBe('low');
+    // The worker profile has no thinkingEffort, so the parent subagent entry's thinkingEffort is copied
+    expect(profiles['worker']?.thinkingEffort).toBe('low');
     expect(profiles['worker']?.description).toBe('Worker subagent');
   });
 

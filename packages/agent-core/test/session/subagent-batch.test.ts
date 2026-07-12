@@ -783,7 +783,7 @@ type MockAttemptRecord = {
   readonly retryAgentId?: string;
   readonly markReady: () => void;
   readonly outcome: ReturnType<typeof createControlledPromise<MockAttemptOutcome<number>>>;
-  readonly modelAlias?: string;
+  modelAlias?: string;
 };
 
 type MockBatchRunnerOptions = {

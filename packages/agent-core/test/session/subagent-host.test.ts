@@ -1327,10 +1327,10 @@ describe('SessionSubagentHost', () => {
     expect(child.agent.config.modelAlias).toBe('default-coder-model');
   });
 
-  it('spawns a subagent with profile-declared thinkingLevel', async () => {
+  it('spawns a subagent with profile-declared thinkingEffort', async () => {
     const parent = testAgent();
     parent.configure();
-    parent.agent.config.update({ modelAlias: 'parent-model', thinkingLevel: 'max' });
+    parent.agent.config.update({ modelAlias: 'parent-model', thinkingEffort: 'max' });
 
     const child = testAgent({
       initialConfig: {
@@ -1349,12 +1349,12 @@ describe('SessionSubagentHost', () => {
       tools: ['Read'],
       systemPrompt: 'coder prompt',
       modelAlias: 'profile-model',
-      thinkingLevel: 'off',
+      thinkingEffort: 'off',
     }));
 
     child.mockNextResponse({
       type: 'text',
-      text: 'Completed with profile-declared thinkingLevel. The summary is deliberately made very long to ensure it exceeds the minimum length threshold for subagent completion and avoids any re-prompting behavior that would cause unexpected generate calls.',
+      text: 'Completed with profile-declared thinkingEffort. The summary is deliberately made very long to ensure it exceeds the minimum length threshold for subagent completion and avoids any re-prompting behavior that would cause unexpected generate calls.',
     });
 
     const handle = await host.spawn({
@@ -1367,8 +1367,8 @@ describe('SessionSubagentHost', () => {
     });
     await handle.completion;
 
-    // Profile declares thinkingLevel, so it takes precedence over parent
-    expect(child.agent.config.thinkingLevel).toBe('off');
+    // Profile declares thinkingEffort, so it takes precedence over parent
+    expect(child.agent.config.thinkingEffort).toBe('off');
   });
 });
 
@@ -1381,7 +1381,7 @@ class TestSubagentHost extends SessionSubagentHost {
     super(session, ownerAgentId);
   }
 
-  protected resolveProfile(_parent: Agent, _profileName: string): ResolvedAgentProfile {
+  protected override resolveProfile(_parent: Agent, _profileName: string): ResolvedAgentProfile {
     return this.customProfile;
   }
 }
@@ -1879,14 +1879,14 @@ function profile(input: {
   readonly systemPrompt: string;
   readonly description?: string | undefined;
   readonly modelAlias?: string | undefined;
-  readonly thinkingLevel?: string | undefined;
+  readonly thinkingEffort?: string | undefined;
   readonly subagents?: Record<string, ResolvedAgentProfile> | undefined;
 }): ResolvedAgentProfile {
   return {
     name: input.name,
     description: input.description,
     modelAlias: input.modelAlias,
-    thinkingLevel: input.thinkingLevel,
+    thinkingEffort: input.thinkingEffort,
     systemPrompt: () => input.systemPrompt,
     tools: [...input.tools],
     subagents: input.subagents,

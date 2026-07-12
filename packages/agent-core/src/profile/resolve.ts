@@ -11,7 +11,7 @@ interface MergedAgentProfile {
   readonly name: string;
   readonly description?: string | undefined;
   readonly modelAlias?: string | undefined;
-  readonly thinkingLevel?: string | undefined;
+  readonly thinkingEffort?: string | undefined;
   readonly systemPromptTemplate: string;
   readonly promptVars: Record<string, string>;
   readonly tools: string[];
@@ -102,7 +102,7 @@ function resolveMergedProfile(
     tools: profile.tools !== undefined ? [...profile.tools] : [...(parent?.tools ?? [])],
     whenToUse: profile.whenToUse ?? parent?.whenToUse,
     modelAlias: profile.modelAlias ?? parent?.modelAlias,
-    thinkingLevel: profile.thinkingLevel ?? parent?.thinkingLevel,
+    thinkingEffort: profile.thinkingEffort ?? parent?.thinkingEffort,
     subagents: cloneSubagents(profile.subagents),
   };
 
@@ -115,7 +115,7 @@ function toResolvedProfile(merged: MergedAgentProfile): ResolvedAgentProfile {
     name: merged.name,
     description: merged.description,
     modelAlias: merged.modelAlias,
-    thinkingLevel: merged.thinkingLevel,
+    thinkingEffort: merged.thinkingEffort,
     systemPrompt: createSystemPromptRenderer(merged),
     tools: [...merged.tools],
     whenToUse: merged.whenToUse,
@@ -193,9 +193,9 @@ function applySubagentOverrides(
       if (!target.modelAlias && subagent.modelAlias !== undefined) {
         target.modelAlias = subagent.modelAlias;
       }
-      // Copy thinkingLevel from parent subagent entry to target (for model-specific thinking configuration).
-      if (!target.thinkingLevel && subagent.thinkingLevel !== undefined) {
-        target.thinkingLevel = subagent.thinkingLevel;
+      // Copy thinkingEffort from parent subagent entry to target (for model-specific thinking configuration).
+      if (!target.thinkingEffort && subagent.thinkingEffort !== undefined) {
+        target.thinkingEffort = subagent.thinkingEffort;
       }
     }
   }

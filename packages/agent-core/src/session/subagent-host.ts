@@ -393,7 +393,6 @@ export class SessionSubagentHost {
         parent.config.modelAlias,
       thinkingEffort: profile.thinkingEffort ?? parent.config.thinkingEffort,
     });
-    });
 
     const context = await prepareSystemPromptContext(
       this.session.systemContextKaos(child.kaos.getcwd()),

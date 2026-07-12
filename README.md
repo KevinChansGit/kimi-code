@@ -17,7 +17,7 @@ Kimi Code CLI is an AI coding agent that runs in your terminal — it can read a
 This fork adds the following capabilities on top of the upstream Kimi Code CLI:
 
 - **Subagent model routing.** Built-in subagents (`coder`, `explore`, `plan`) can be configured to use different models than the main agent. For example, the main agent can use a powerful model (e.g. Kimi K2.5) while subagents use cost-optimized models (e.g. DeepSeek V4 Flash), reducing API costs without sacrificing quality on the main reasoning path.
-- **Per-profile thinking-level configuration.** Each subagent profile can declare its own `thinkingLevel` (e.g. `off` / `low` / `medium` / `high` / `max`), independent of the main agent's setting. Useful for tuning reasoning depth per task type.
+- **Per-profile thinking-effort configuration.** Each subagent profile can declare its own `thinkingEffort` (e.g. `off` / `low` / `medium` / `high` / `max`), independent of the main agent's setting. Useful for tuning reasoning depth per task type.
 - **Runtime model override.** `spawn` options accept a `modelAlias` parameter to override the profile-declared model on a per-invocation basis.
 - **Config-level agent defaults.** The `config.toml` `[agent_defaults]` section lets you assign a default model alias to any agent by name, without creating a separate profile file.
 - **Disabled auto-update.** The built-in `kimi update` command is disabled to prevent overwriting this custom build with upstream binaries. Run `git pull` and `pnpm build` to update from source instead.
@@ -58,7 +58,7 @@ type = "openai"
 api_key = "YOUR_API_KEY"
 ```
 
-Alternatively, you can create custom agent profile YAML files with `modelAlias` and `thinkingLevel` fields — the profile loader supports both `extends` inheritance and per-subagent overrides.
+Alternatively, you can create custom agent profile YAML files with `modelAlias` and `thinkingEffort` fields — the profile loader supports both `extends` inheritance and per-subagent overrides.
 
 ## Install
 

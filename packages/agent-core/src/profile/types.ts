@@ -6,7 +6,7 @@ import type { SkillRegistry } from '../agent/skill/types';
 export const RawSubagentProfileSchema = z.object({
   description: z.string().optional(),
   modelAlias: z.string().min(1).optional(),
-  thinkingLevel: z.string().min(1).optional(),
+  thinkingEffort: z.string().min(1).optional(),
 });
 
 export type RawSubagentProfile = z.infer<typeof RawSubagentProfileSchema>;
@@ -23,7 +23,7 @@ export const RawAgentProfileSchema = z.object({
   tools: z.array(z.string()).optional(),
   whenToUse: z.string().optional(),
   modelAlias: z.string().min(1).optional(),
-  thinkingLevel: z.string().min(1).optional(),
+  thinkingEffort: z.string().min(1).optional(),
   subagents: z.record(z.string(), RawSubagentProfileSchema).optional(),
 });
 
@@ -54,7 +54,7 @@ export interface ResolvedAgentProfile {
   name: string;
   description?: string;
   modelAlias?: string;
-  thinkingLevel?: string;
+  thinkingEffort?: string;
   systemPrompt: SystemPromptRenderer;
   tools: string[];
   whenToUse?: string;

@@ -74,8 +74,8 @@ export const FEEDBACK_TELEMETRY_EVENT = 'feedback_submitted';
 // CDN source of truth: all version checks and native install scripts pull from here.
 // Disabled for custom build — auto-update would overwrite the fork with upstream binaries.
 export const KIMI_CODE_CDN_BASE = 'https://invalid-disabled-for-custom-build';
-export const KIMI_CODE_CDN_LATEST_URL = 'https://invalid-disabled-for-custom-build';
-export const KIMI_CODE_CDN_LATEST_JSON_URL = 'https://invalid-disabled-for-custom-build';
+export const KIMI_CODE_CDN_LATEST_URL = 'https://invalid-disabled-for-custom-build/latest';
+export const KIMI_CODE_CDN_LATEST_JSON_URL = 'https://invalid-disabled-for-custom-build/latest.json';
 export const KIMI_CODE_TIPS_BANNER_URL = 'https://invalid-disabled-for-custom-build';
 export const KIMI_CODE_PLUGIN_MARKETPLACE_URL = 'https://invalid-disabled-for-custom-build';
 export const KIMI_CODE_PLUGIN_MARKETPLACE_URL_ENV = 'KIMI_CODE_PLUGIN_MARKETPLACE_URL';
