@@ -14,6 +14,7 @@ import type {
   BackgroundTaskInfo,
   CompactOptions,
   CreateGoalInput,
+  GetCronTasksResult,
   GoalSnapshot,
   GoalToolResult,
   McpServerInfo,
@@ -31,6 +32,8 @@ import type {
   SessionSummary,
   SessionUsage,
   SkillSummary,
+  PluginCommandDef,
+  ThinkingEffort,
   Unsubscribe,
 } from '#/types';
 
@@ -193,14 +196,14 @@ export class Session {
     await this.rpc.setModel({ sessionId: this.id, model: normalized });
   }
 
-  async setThinking(level: string): Promise<void> {
+  async setThinking(effort: ThinkingEffort): Promise<void> {
     this.ensureOpen();
     const normalized = normalizeRequiredString(
-      level,
-      'Session thinking level cannot be empty',
+      effort,
+      'Session thinking effort cannot be empty',
       ErrorCodes.SESSION_THINKING_EMPTY,
     );
-    await this.rpc.setThinking({ sessionId: this.id, level: normalized });
+    await this.rpc.setThinking({ sessionId: this.id, effort: normalized });
   }
 
   async setPermission(mode: PermissionMode): Promise<void> {
@@ -289,6 +292,11 @@ export class Session {
     return this.rpc.listSkills({ sessionId: this.id });
   }
 
+  async listPluginCommands(): Promise<readonly PluginCommandDef[]> {
+    this.ensureOpen();
+    return this.rpc.listPluginCommands({ sessionId: this.id });
+  }
+
   /**
    * List background tasks for this session's interactive agent.
    *
@@ -370,6 +378,32 @@ export class Session {
     });
   }
 
+  /**
+   * Block until every still-running background task (across all agents in this
+   * session) reaches a terminal state. Used by `kimi -p` after the main agent's
+   * turn finishes when the resolved print background mode is `'drain'`
+   * (`print_background_mode = "drain"`, or the legacy `keep_alive_on_exit = true`
+   * fallback), so background subagents get a chance to complete before the process
+   * exits. No-op in other modes. Bounded by `background.print_wait_ceiling_s`.
+   */
+  async waitForBackgroundTasksOnPrint(): Promise<void> {
+    this.ensureOpen();
+    await this.rpc.waitForBackgroundTasksOnPrint({ sessionId: this.id });
+  }
+
+  /**
+   * Used by `kimi -p` after the main agent's turn ends with `reason ===
+   * 'completed'`. Returns `'finish'` when the run may exit, or `'continue'` when
+   * the caller must keep the session alive so a background-task completion can
+   * steer the main agent into a new turn. Policy is selected by
+   * `background.print_background_mode` (`'exit' | 'drain' | 'steer'`); when unset
+   * it falls back to the legacy `keep_alive_on_exit` mapping (`true ⇒ 'drain'`).
+   */
+  async handlePrintMainTurnCompleted(): Promise<'finish' | 'continue'> {
+    this.ensureOpen();
+    return this.rpc.handlePrintMainTurnCompleted({ sessionId: this.id });
+  }
+
   // --- Goal lifecycle ---------------------------------------------------
   // Deterministic user/host control surface. There is intentionally no
   // `updateGoal`: the goal's terminal status is decided by the model via the
@@ -399,6 +433,16 @@ export class Session {
   async cancelGoal(): Promise<GoalSnapshot> {
     this.ensureOpen();
     return this.rpc.cancelGoal({ sessionId: this.id });
+  }
+
+  /**
+   * Enumerate the cron tasks scheduled in this session. Hosts running a
+   * bounded session lifetime (e.g. `kimi -p`) poll this to decide whether
+   * pending scheduled work still needs the process alive.
+   */
+  async getCronTasks(): Promise<GetCronTasksResult> {
+    this.ensureOpen();
+    return this.rpc.getCronTasks({ sessionId: this.id });
   }
 
   async listMcpServers(): Promise<readonly McpServerInfo[]> {
@@ -467,6 +511,29 @@ export class Session {
       sessionId: this.id,
       name: skillName,
       ...(skillArgs !== undefined ? { args: skillArgs } : {}),
+    });
+  }
+
+  async activatePluginCommand(
+    pluginId: string,
+    commandName: string,
+    args?: string | undefined,
+  ): Promise<void> {
+    this.ensureOpen();
+    const normalizedPluginId = pluginId.trim();
+    const normalizedCommandName = commandName.trim();
+    if (normalizedPluginId.length === 0 || normalizedCommandName.length === 0) {
+      throw new KimiError(
+        ErrorCodes.REQUEST_INVALID,
+        'Plugin id and command name cannot be empty',
+      );
+    }
+    const commandArgs = normalizeOptionalString(args);
+    await this.rpc.activatePluginCommand({
+      sessionId: this.id,
+      pluginId: normalizedPluginId,
+      commandName: normalizedCommandName,
+      ...(commandArgs !== undefined ? { args: commandArgs } : {}),
     });
   }
 

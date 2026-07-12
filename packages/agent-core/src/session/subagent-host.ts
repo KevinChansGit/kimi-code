@@ -142,7 +142,7 @@ export class SessionSubagentHost {
   /**
    * Resume a previously spawned subagent.
    *
-   * Does NOT re-configure cwd, modelAlias, or thinkingLevel so that
+   * Does NOT re-configure cwd, modelAlias, or thinkingEffort so that
    * profile-declared cost-optimized models are preserved across resume cycles.
    */
   async resume(agentId: string, options: RunSubagentOptions): Promise<SubagentHandle> {
@@ -163,7 +163,7 @@ export class SessionSubagentHost {
   /**
    * Retry a previously spawned subagent after a failure.
    *
-   * Does NOT re-configure cwd, modelAlias, or thinkingLevel so that
+   * Does NOT re-configure cwd, modelAlias, or thinkingEffort so that
    * profile-declared cost-optimized models are preserved across retry cycles.
    */
   async retry(agentId: string, options: RunSubagentOptions): Promise<SubagentHandle> {
@@ -225,7 +225,7 @@ export class SessionSubagentHost {
    * Start a BTW (by-the-way) side-conversation agent.
    *
    * BTW is a lightweight mirror of the parent agent: it always copies the
-   * parent's current modelAlias, thinkingLevel, systemPrompt, and tools.
+   * parent's current modelAlias, thinkingEffort, systemPrompt, and tools.
    * It does NOT use the subagent profile-based cost-optimization path, because
    * BTW is meant for quick follow-up questions in the same context, not for
    * delegated tasks.
@@ -243,7 +243,7 @@ export class SessionSubagentHost {
 
     child.config.update({
       modelAlias: parent.config.modelAlias,
-      thinkingLevel: parent.config.thinkingLevel,
+      thinkingEffort: parent.config.thinkingEffort,
       systemPrompt: parent.config.systemPrompt,
     });
     child.tools.copyLoopToolsFrom(parent.tools);
@@ -391,7 +391,8 @@ export class SessionSubagentHost {
         profile.modelAlias ??
         configDefaults?.[profile.name] ??
         parent.config.modelAlias,
-      thinkingLevel: profile.thinkingLevel ?? parent.config.thinkingLevel,
+      thinkingEffort: profile.thinkingEffort ?? parent.config.thinkingEffort,
+    });
     });
 
     const context = await prepareSystemPromptContext(
@@ -399,7 +400,7 @@ export class SessionSubagentHost {
       this.session.options.kimiHomeDir,
       { additionalDirs: child.getAdditionalDirs() },
     );
-    child.useProfile(profile, context);
+    child.useProfile(profile, context, this.session.options.kimiHomeDir);
     child.tools.inheritUserTools(parent.tools);
   }
 

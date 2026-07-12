@@ -2,6 +2,10 @@
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { AppGoal } from '../../api/types';
+import Card from '../ui/Card.vue';
+import Badge from '../ui/Badge.vue';
+import Button from '../ui/Button.vue';
+import Icon from '../ui/Icon.vue';
 
 const props = defineProps<{ goal: AppGoal; forceExpanded?: number }>();
 const emit = defineEmits<{ controlGoal: [action: 'pause' | 'resume' | 'cancel'] }>();
@@ -23,6 +27,15 @@ const tokenPct = computed(() => {
   return Math.max(0, Math.min(100, Math.round((props.goal.tokensUsed / budget) * 100)));
 });
 
+function goalStatusLabel(status: AppGoal['status']): string {
+  switch (status) {
+    case 'active': return t('status.goalStatusActive');
+    case 'paused': return t('status.goalStatusPaused');
+    case 'blocked': return t('status.goalStatusBlocked');
+    case 'complete': return t('status.goalStatusComplete');
+  }
+}
+
 function formatMs(ms: number): string {
   const sec = Math.max(0, Math.round(ms / 1000));
   const min = Math.floor(sec / 60);
@@ -35,91 +48,115 @@ function formatMs(ms: number): string {
 </script>
 
 <template>
-  <section class="goal-strip" :class="{ expanded }">
-    <button class="goal-row" type="button" @click="expanded = !expanded">
-      <span class="goal-kicker">Goal</span>
-      <span class="goal-objective" :class="{ 'expanded-hidden': expanded }">{{ goal.objective }}</span>
-      <span class="goal-status" :class="`status-${goal.status}`">{{ goal.status }}</span>
-      <span class="goal-progress" aria-hidden="true">
-        <span class="goal-progress-fill" :style="{ width: `${tokenPct}%` }"></span>
-      </span>
-      <svg
-        class="goal-chevron"
-        :class="{ open: expanded }"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M6 4l4 4-4 4" />
-      </svg>
-    </button>
-    <div v-if="expanded" class="goal-body">
+  <Card class="goal-strip" :class="{ expanded }">
+    <template #head>
+      <button class="goal-row" type="button" @click="expanded = !expanded">
+        <span class="goal-kicker">{{ t('status.goalLabel') }}</span>
+        <span class="goal-objective" :class="{ 'expanded-hidden': expanded }">{{ goal.objective }}</span>
+        <Badge
+          :variant="goal.status === 'active' ? 'success' : goal.status === 'blocked' ? 'danger' : goal.status === 'paused' ? 'warning' : 'neutral'"
+          size="sm"
+          class="goal-status"
+        >{{ goalStatusLabel(goal.status) }}</Badge>
+        <span class="goal-progress" aria-hidden="true">
+          <span class="goal-progress-fill" :style="{ width: `${tokenPct}%` }"></span>
+        </span>
+        <Icon class="goal-chevron" :class="{ open: expanded }" name="chevron-right" size="md" />
+      </button>
+    </template>
+
+    <template v-if="expanded" #default>
       <div class="goal-full">{{ goal.objective }}</div>
       <div v-if="goal.completionCriterion" class="goal-criterion">
         <span>Done when</span>
         <p>{{ goal.completionCriterion }}</p>
       </div>
-      <div class="goal-stats">
-        <span>{{ goal.turnsUsed }} turns</span>
-        <span>{{ goal.tokensUsed.toLocaleString() }} tokens</span>
-        <span>{{ formatMs(goal.wallClockMs) }}</span>
-        <span v-if="goal.budget.tokenBudget !== null">{{ tokenPct }}% token budget</span>
+    </template>
+
+    <template v-if="expanded" #foot>
+      <div class="goal-footer">
+        <div class="goal-meta">
+          <span>{{ goal.turnsUsed }} turns</span>
+          <span>{{ goal.tokensUsed.toLocaleString() }} tokens</span>
+          <span>{{ formatMs(goal.wallClockMs) }}</span>
+          <span v-if="goal.budget.tokenBudget !== null">{{ tokenPct }}% token budget</span>
+        </div>
+        <div class="goal-actions">
+          <Button
+            v-if="goal.status === 'active'"
+            size="sm"
+            variant="secondary"
+            class="goal-action"
+            @click.stop="emit('controlGoal', 'pause')"
+          >
+            <Icon name="pause" size="md" />
+            <span>{{ t('status.goalPause') }}</span>
+          </Button>
+          <Button
+            v-if="goal.status === 'paused' || goal.status === 'blocked'"
+            size="sm"
+            variant="primary"
+            class="goal-action"
+            @click.stop="emit('controlGoal', 'resume')"
+          >
+            <Icon name="play" size="md" />
+            <span>{{ t('status.goalResume') }}</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="danger-soft"
+            class="goal-action"
+            @click.stop="emit('controlGoal', 'cancel')"
+          >
+            <Icon name="close" size="md" />
+            <span>{{ t('status.goalCancel') }}</span>
+          </Button>
+        </div>
       </div>
-      <div class="goal-actions">
-        <button
-          v-if="goal.status !== 'paused'"
-          type="button"
-          class="goal-action"
-          @click.stop="emit('controlGoal', 'pause')"
-        >{{ t('status.goalPause') }}</button>
-        <button
-          v-if="goal.status === 'paused'"
-          type="button"
-          class="goal-action primary"
-          @click.stop="emit('controlGoal', 'resume')"
-        >{{ t('status.goalResume') }}</button>
-        <button
-          type="button"
-          class="goal-action danger"
-          @click.stop="emit('controlGoal', 'cancel')"
-        >{{ t('status.goalCancel') }}</button>
-      </div>
-    </div>
-  </section>
+    </template>
+  </Card>
 </template>
 
 <style scoped>
 .goal-strip {
-  margin: 8px 16px 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  overflow: hidden;
+  --composer-send-size: 32px;
+  --composer-send-inset: var(--space-2);
+  margin: var(--space-2) var(--space-4) 0;
 }
+.goal-strip.ui-card {
+  border-radius: calc((var(--composer-send-size) / 2) + var(--composer-send-inset));
+}
+.goal-strip :deep(.ui-card__foot) {
+  padding: var(--composer-send-inset);
+}
+.goal-strip :deep(.ui-card__head),
+.goal-strip :deep(.ui-card__body),
+.goal-strip :deep(.ui-card__foot) {
+  padding-left: calc((var(--composer-send-inset) + var(--composer-send-size)) / 2);
+}
+/* When collapsed the body/foot slots are not rendered; collapse the (always-
+   rendered) Card body and drop the head border so the strip is a single row. */
+.goal-strip:not(.expanded) :deep(.ui-card__body) { display: none; }
+.goal-strip:not(.expanded) :deep(.ui-card__head) { border-bottom: none; }
+
 .goal-row {
   width: 100%;
-  min-height: 36px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
+  gap: var(--space-2);
+  padding: 0;
   border: none;
   background: transparent;
-  color: var(--ink);
-  font: inherit;
+  color: var(--color-text);
+  font: var(--text-base)/var(--leading-normal) var(--font-ui);
+  text-align: left;
   cursor: pointer;
 }
 .goal-kicker {
   flex: none;
-  color: var(--ok);
-  font-family: var(--mono);
-  font-size: calc(var(--ui-font-size) - 3px);
-  font-weight: 700;
-  text-transform: uppercase;
+  color: var(--color-success);
+  font: var(--text-base)/var(--leading-normal) var(--font-ui);
+  font-weight: var(--weight-semibold);
 }
 .goal-objective {
   min-width: 0;
@@ -127,8 +164,9 @@ function formatMs(ms: number): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink);
-  font-size: calc(var(--ui-font-size) - 1.5px);
+  color: var(--color-text);
+  font-size: var(--text-base);
+  text-align: left;
 }
 .goal-objective.expanded-hidden {
   visibility: hidden;
@@ -136,22 +174,12 @@ function formatMs(ms: number): string {
 }
 .goal-status {
   flex: none;
-  border-radius: 999px;
-  padding: 1px 7px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--dim);
-  font-family: var(--mono);
-  font-size: max(9px, calc(var(--ui-font-size) - 3.5px));
 }
-.status-active { color: var(--ok); }
-.status-blocked { color: var(--err); }
-.status-paused { color: var(--warn); }
 .goal-progress {
   width: 54px;
   height: 4px;
-  border-radius: 999px;
-  background: var(--line);
+  border-radius: var(--radius-full);
+  background: var(--color-line);
   overflow: hidden;
   flex: none;
 }
@@ -159,102 +187,75 @@ function formatMs(ms: number): string {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--ok);
+  background: var(--color-success);
 }
 .goal-chevron {
-  width: 14px;
-  height: 14px;
-  color: var(--muted);
-  transition: transform 0.12s;
+  width: var(--p-ic-sm);
+  height: var(--p-ic-sm);
+  color: var(--color-text-muted);
+  transition: transform var(--duration-fast) var(--ease-out);
   flex: none;
 }
 .goal-chevron.open {
   transform: rotate(90deg);
 }
-.goal-body {
-  border-top: 1px solid var(--line);
-  padding: 10px 12px 12px;
-}
 .goal-full {
-  color: var(--ink);
-  font-size: var(--ui-font-size-sm);
-  line-height: 1.5;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .goal-criterion {
-  margin-top: 10px;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: calc(var(--ui-font-size) - 3px);
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+  font: var(--text-xs) var(--font-mono);
   text-transform: uppercase;
 }
 .goal-criterion p {
-  margin: 4px 0 0;
-  color: var(--dim);
-  font-family: var(--sans);
-  font-size: var(--ui-font-size-xs);
-  line-height: 1.45;
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font: var(--text-xs)/var(--leading-normal) var(--font-ui);
   text-transform: none;
 }
-.goal-stats {
+.goal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+}
+.goal-meta {
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: calc(var(--ui-font-size) - 3px);
-}
-.goal-stats span {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 2px 7px;
-  background: var(--bg);
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font: 12px/var(--leading-normal) var(--font-ui);
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
 }
 .goal-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
+  gap: var(--space-2);
+  justify-content: flex-end;
+  flex: none;
 }
 .goal-action {
-  flex: 1;
+  flex: none;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg);
-  color: var(--ink);
-  padding: 6px 10px;
-  font-family: var(--sans);
-  font-size: calc(var(--ui-font-size) - 1.5px);
-  font-weight: 500;
-  cursor: pointer;
+  height: var(--composer-send-size);
+  border-radius: calc(var(--composer-send-size) / 2);
+  padding-inline: var(--space-4);
 }
-.goal-action:hover {
-  background: var(--panel2);
-  border-color: var(--bd);
-}
-.goal-action.primary {
-  border-color: var(--blue);
-  background: var(--blue);
-  color: var(--bg);
-}
-.goal-action.primary:hover {
-  background: color-mix(in srgb, var(--blue) 88%, var(--bg));
-}
-.goal-action.danger {
-  border-color: color-mix(in srgb, var(--err) 30%, var(--line));
-  color: var(--err);
-}
-.goal-action.danger:hover {
-  background: color-mix(in srgb, var(--err) 8%, var(--panel));
-  border-color: color-mix(in srgb, var(--err) 45%, var(--line));
+.goal-action :deep(.ui-button__content) {
+  gap: var(--space-1);
 }
 @media (max-width: 640px) {
   .goal-strip {
-    margin: 8px 10px 0;
+    --composer-send-size: 36px;
+    margin: var(--space-2) var(--space-3) 0;
   }
   .goal-progress {
     display: none;

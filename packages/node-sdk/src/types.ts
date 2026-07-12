@@ -24,6 +24,7 @@ export type {
   BackgroundTaskStatus,
   ConfigDiagnostics,
   ContextMessage,
+  CronTaskSnapshot,
   ExperimentalFeatureState,
   ExperimentalFlagMap,
   ExperimentalFlagSource,
@@ -32,6 +33,7 @@ export type {
   GoalBudgetReport,
   GoalChange,
   GoalChangeStats,
+  GetCronTasksResult,
   GoalSnapshot,
   GoalStatus,
   GoalToolResult,
@@ -43,6 +45,7 @@ export type {
   ModelAlias,
   MoonshotServiceConfig,
   OAuthRef,
+  PluginCommandDef,
   PluginGithubMetadata,
   PluginGithubRef,
   PluginInfo,
@@ -65,7 +68,7 @@ export type {
 
 export type { KimiHostIdentity, OAuthRefreshOutcome };
 export type { TelemetryClient, TelemetryContextPatch, TelemetryProperties };
-export type { ContentPart, Role, ToolCall } from '@moonshot-ai/kosong';
+export type { ContentPart, Role, ThinkingEffort, ToolCall } from '@moonshot-ai/kosong';
 
 export type PermissionMode = 'yolo' | 'manual' | 'auto';
 
@@ -103,6 +106,14 @@ export interface CreateSessionOptions {
   readonly persistenceKaos?: Kaos | undefined;
   readonly additionalDirs?: readonly string[];
   readonly sessionStartedProperties?: TelemetryProperties;
+  /**
+   * Print-mode (`kimi -p`) only: when the main agent ends a turn while
+   * background subagents (`kind === 'agent'`) are still running, hold the turn
+   * open and idle-wait until they all finish, flushing their completions into
+   * the turn so the model can react before the run exits. Ignored by
+   * interactive / SDK sessions.
+   */
+  readonly drainAgentTasksOnStop?: boolean;
 }
 
 export interface RenameSessionInput {
@@ -197,7 +208,7 @@ export interface SessionUsage {
 
 export interface SessionStatus {
   readonly model?: string;
-  readonly thinkingLevel: string;
+  readonly thinkingEffort: string;
   readonly permission: PermissionMode;
   readonly planMode: boolean;
   readonly swarmMode?: boolean | undefined;
