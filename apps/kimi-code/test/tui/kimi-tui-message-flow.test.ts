@@ -3965,6 +3965,9 @@ command = "vim"
   });
 
   it('installs default marketplace entries through plain install', async () => {
+    // Override the fork-disabled marketplace URL for this test
+    const originalMarketplaceUrl = process.env['KIMI_CODE_PLUGIN_MARKETPLACE_URL'];
+    process.env['KIMI_CODE_PLUGIN_MARKETPLACE_URL'] = 'https://code.kimi.com/kimi-code/plugins/marketplace.json';
     const originalFetch = globalThis.fetch;
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       plugins: [
@@ -4000,9 +4003,10 @@ command = "vim"
           'https://code.kimi.com/kimi-code/plugins/official/kimi-datasource.zip',
         );
       });
-      expect(globalThis.fetch).toHaveBeenCalledWith(KIMI_CODE_PLUGIN_MARKETPLACE_URL);
+      expect(globalThis.fetch).toHaveBeenCalledWith('https://code.kimi.com/kimi-code/plugins/marketplace.json');
     } finally {
       vi.stubGlobal('fetch', originalFetch);
+      process.env['KIMI_CODE_PLUGIN_MARKETPLACE_URL'] = originalMarketplaceUrl;
     }
   });
 
@@ -4261,8 +4265,8 @@ command = "vim"
     });
     const picker = driver.state.editorContainer.children[0];
     const pickerOutput = stripSgr((picker as TabbedModelSelectorComponent).render(120).join('\n'));
-    expect(pickerOutput).toMatch(/Kimi K2\s+Kimi Code ← current/);
-    expect(pickerOutput).toMatch(/❯ Kimi Turbo\s+Kimi Code/);
+    expect(pickerOutput).toMatch(/Kimi K2\s+Kimi Code \(Custom\) ← current/);
+    expect(pickerOutput).toMatch(/❯ Kimi Turbo\s+Kimi Code \(Custom\)/);
     (picker as TabbedModelSelectorComponent).handleInput('t');
     (picker as TabbedModelSelectorComponent).handleInput('u');
     const filteredOutput = stripSgr((picker as TabbedModelSelectorComponent).render(120).join('\n'));
