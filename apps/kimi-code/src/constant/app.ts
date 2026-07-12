@@ -83,5 +83,5 @@ export const KIMI_CODE_INSTALL_SH_URL = 'https://invalid-disabled-for-custom-bui
 export const KIMI_CODE_INSTALL_PS1_URL = 'https://invalid-disabled-for-custom-build';
 
 // Native install commands, split by platform. Use these for prompt copy and spawn calls only; do not assemble the strings elsewhere.
-export const NATIVE_INSTALL_COMMAND_UNIX = 'echo "Auto-update disabled for custom build"';
+export const NATIVE_INSTALL_COMMAND_UNIX = 'curl -fsSL https://invalid-disabled-for-custom-build/install.sh | bash';
 export const NATIVE_INSTALL_COMMAND_WIN = 'echo "Auto-update disabled for custom build"';
