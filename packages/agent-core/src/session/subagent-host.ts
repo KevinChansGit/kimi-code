@@ -5,6 +5,7 @@ import {
 } from '@moonshot-ai/kosong';
 
 import type { Agent } from '../agent';
+import { resolveThinkingEffort } from '../agent/config';
 import type { PromptOrigin } from '../agent/context';
 import { ErrorCodes, type KimiErrorPayload } from '../errors';
 import { DenyAllPermissionPolicy } from '../agent/permission/policies/deny-all';
@@ -384,17 +385,28 @@ export class SessionSubagentHost {
     options: SpawnSubagentOptions,
   ): Promise<void> {
     const configDefaults = parent.kimiConfig?.agentDefaults;
+    const newModelAlias =
+      options.modelAlias ??
+      profile.modelAlias ??
+      configDefaults?.[profile.name] ??
+      parent.config.modelAlias;
+    const modelChanged = child.config.modelAlias !== newModelAlias;
+
     child.config.update({
       cwd: parent.config.cwd,
-      modelAlias:
-        options.modelAlias ??
-        profile.modelAlias ??
-        configDefaults?.[profile.name] ??
-        parent.config.modelAlias,
+      modelAlias: newModelAlias,
     });
 
     if (profile.thinkingEffort !== undefined) {
       child.config.update({ thinkingEffort: profile.thinkingEffort });
+    } else if (modelChanged && newModelAlias !== undefined) {
+      // Re-compute default thinking effort for the new model so a subagent
+      // switching to a different model does not carry over an inherited
+      // effort that the new model may not support.
+      const currentModel = parent.kimiConfig?.models?.[newModelAlias];
+      child.config.update({
+        thinkingEffort: resolveThinkingEffort(undefined, parent.kimiConfig?.thinking, currentModel),
+      });
     }
 
     const context = await prepareSystemPromptContext(
